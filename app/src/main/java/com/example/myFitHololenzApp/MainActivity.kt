@@ -1,6 +1,8 @@
 package com.example.myFitHololenzApp
 
+import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
@@ -15,6 +17,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.myFitHololenzApp.databinding.ActivityMainBinding
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataType
 
@@ -26,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     var GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 123456
     val REQUEST_CODE = 1
     private val TAG = "MyActivity"
-    private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_HEART_RATE_BPM).build()
+    private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_STEP_COUNT_DELTA).build()
 
 
 
@@ -40,20 +43,33 @@ class MainActivity : AppCompatActivity() {
         //setSupportActionBar(binding.toolbar)
         setFitnessOption();
         checkFitInstalled();
+
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            // This example shows subscribing to a DataType, across all possible data
+            // sources. Alternatively, a specific DataSource can be used.
+            .subscribe(DataType.TYPE_STEP_COUNT_DELTA)
+            .addOnSuccessListener {
+                Log.i(TAG, "Successfully subscribed!")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "There was a problem subscribing.", e)
+            }
+
+
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            .listSubscriptions()
+            .addOnSuccessListener { subscriptions ->
+                for (sc in subscriptions) {
+                    val dt = sc.dataType
+                    if (dt != null) {
+                        Log.i(TAG, "Active subscription for data type: ${dt.name}")
+                    }
+                }
+            }
         binding.root.findViewById<Button>(R.id.button1).setOnClickListener { view ->
+            val serviceIntent = Intent(this, NewService::class.java)
+            startService(serviceIntent)
 
-            val request = OneTimeWorkRequestBuilder<Dataworker>().build()
-            WorkManager.getInstance(this).enqueue(request)
-
-
-            WorkManager.getInstance(this).getWorkInfoByIdLiveData(request.id)
-                .observe(this, Observer {
-
-                    val status: String = it.state.name
-                    Toast.makeText(this,status, Toast.LENGTH_SHORT).show()
-                })
-
-            binding.root.findViewById<TextView>(R.id.textView1).setText("agcgjcjgcjgcjgf")
         }
 
 
