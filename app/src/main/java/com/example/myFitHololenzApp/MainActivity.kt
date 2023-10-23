@@ -1,6 +1,10 @@
 package com.example.myFitHololenzApp
 
+import android.Manifest
+import android.app.AlertDialog
+import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
@@ -9,6 +13,7 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Observer
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
@@ -17,9 +22,12 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.myFitHololenzApp.databinding.ActivityMainBinding
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
+import com.google.android.gms.fitness.data.DataSource
 import com.google.android.gms.fitness.data.DataType
+import com.google.android.gms.fitness.request.DataSourcesRequest
 
 
 class MainActivity : AppCompatActivity() {
@@ -29,7 +37,7 @@ class MainActivity : AppCompatActivity() {
     var GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 123456
     val REQUEST_CODE = 1
     private val TAG = "MyActivity"
-    private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_STEP_COUNT_DELTA).build()
+    private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_LOCATION_SAMPLE).build()
 
 
 
@@ -40,9 +48,73 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         //setContentView(R.layout.activity_main)
 
-        //setSupportActionBar(binding.toolbar)
+        val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
+
+
+
+
+
+        if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
+            GoogleSignIn.requestPermissions(
+                this, // your activity
+                GOOGLE_FIT_PERMISSIONS_REQUEST_CODE, // e.g. 1
+                account,
+                fitnessOptions)
+        }
+//        else {
+//            accessGoogleFit(fitnessOptions)
+//
+//        }
         setFitnessOption();
         checkFitInstalled();
+
+
+        binding.root.findViewById<Button>(R.id.button1).setOnClickListener { view ->
+            val serviceIntent = Intent(this, NewService::class.java)
+
+            startService(serviceIntent)
+            //test123()
+
+        }
+
+
+
+
+//       val fitnessOptions = FitnessOptions.builder()
+//            .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
+//            .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
+//            .build()
+//
+//
+//
+//
+
+
+
+
+    }
+
+
+    fun test123(){
+
+        var fitnessOptions = FitnessOptions.builder()
+            .addDataType(DataType.TYPE_ACTIVITY_SEGMENT)
+            .addDataType(DataType.TYPE_HEART_RATE_BPM)
+            .addDataType(DataType.TYPE_STEP_COUNT_DELTA)
+            .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA)
+            .build()
+
+
+
+
+        PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION)
+
+
+
+
+        // findFitnessDataSources()
 
         Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
             // This example shows subscribing to a DataType, across all possible data
@@ -66,43 +138,40 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-        binding.root.findViewById<Button>(R.id.button1).setOnClickListener { view ->
-            val serviceIntent = Intent(this, NewService::class.java)
-            startService(serviceIntent)
-
-        }
 
 
 
+// Note: Fitness.SensorsApi.findDataSources() requires the
+// ACCESS_FINE_LOCATION permission.
+        Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            .findDataSources(
+                DataSourcesRequest.Builder()
+                    .setDataTypes(DataType.TYPE_STEP_COUNT_DELTA)
+                    .setDataSourceTypes(DataSource.TYPE_RAW)
+                    .build())
+            .addOnSuccessListener { dataSources ->
+                dataSources.forEach {
+                    Log.i(TAG, "Data source found: ${it.streamIdentifier}")
+                    Log.i(TAG, "Data Source type: ${it.dataType.name}")
 
-//       val fitnessOptions = FitnessOptions.builder()
-//            .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-//            .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-//            .build()
-//
-//
-//
-//
-//        val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
-//        if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
-//            GoogleSignIn.requestPermissions(
-//                this, // your activity
-//                GOOGLE_FIT_PERMISSIONS_REQUEST_CODE, // e.g. 1
-//                account,
-//                fitnessOptions)
-//        }
-////        else {
-////            accessGoogleFit(fitnessOptions)
-////
-////        }
 
+                    if (it.dataType == DataType.TYPE_STEP_COUNT_DELTA) {
+                        Log.i(TAG, "Data source for STEP_COUNT_DELTA found!")
+
+
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Find data sources request failed", e)
+            }
 
 
     }
 
     fun checkFitInstalled() {
         if (isGoogleFitPermissionGranted()) {
-            // do whatever you need here
+            Log.i(TAG, "Granted")
         } else {
             requestGoogleFitPermission()
         }
@@ -110,11 +179,10 @@ class MainActivity : AppCompatActivity() {
 
     fun setFitnessOption() {
         fitnessOptions = FitnessOptions.builder()
-            .addDataType(DataType.TYPE_ACTIVITY_SEGMENT, FitnessOptions.ACCESS_READ)
-            .addDataType(DataType.TYPE_HEART_RATE_BPM, FitnessOptions.ACCESS_READ)
-            .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-            .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
             .addDataType(DataType.TYPE_ACTIVITY_SEGMENT)
+            .addDataType(DataType.TYPE_HEART_RATE_BPM)
+            .addDataType(DataType.TYPE_STEP_COUNT_DELTA)
+            .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA)
             .build()
     }
 

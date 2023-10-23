@@ -1,13 +1,15 @@
 package com.example.myFitHololenzApp
 
+import android.Manifest
 import android.app.Service
-import android.app.Service.START_NOT_STICKY
-import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.IBinder
 import android.util.Log
 import androidx.annotation.Nullable
+import androidx.core.app.ActivityCompat
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptionsExtension
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataSource
@@ -15,67 +17,149 @@ import com.google.android.gms.fitness.data.DataType
 import com.google.android.gms.fitness.request.DataSourcesRequest
 import com.google.android.gms.fitness.request.OnDataPointListener
 import com.google.android.gms.fitness.request.SensorRequest
+import com.google.android.gms.tasks.Task
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
-import kotlin.math.log
 
 
 class NewService(): Service() {
 
 
     private val context1 = this
-    private val fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_STEP_COUNT_DELTA).build()
-    var GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 123456
-    val REQUEST_CODE = 1
     private val TAG = "thread"
 
 
-    //val acc = GoogleSignIn.requestPermissions(context1,GOOGLE_FIT_PERMISSIONS_REQUEST_CODE,GoogleSignIn.getAccountForExtension(context1, fitnessOptions),fitnessOptions)
-    private var dataPointListener: OnDataPointListener? = null
 
+    //val acc = GoogleSignIn.requestPermissions(context1,GOOGLE_FIT_PERMISSIONS_REQUEST_CODE,GoogleSignIn.getAccountForExtension(context1, fitnessOptions),fitnessOptions)
+    var dataPointListener: OnDataPointListener? = null
+    var fitnessOptions = FitnessOptions.builder()
+        .addDataType(DataType.TYPE_ACTIVITY_SEGMENT)
+        .addDataType(DataType.TYPE_HEART_POINTS)
+        .addDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
+        .addDataType(DataType.TYPE_LOCATION_SAMPLE).accessActivitySessions(0)
+        .build()
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "running onCreate")
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.v(TAG,"testtstts");
 
-
-
-
-        Fitness.getSensorsClient(context1, GoogleSignIn.getAccountForExtension(context1, fitnessOptions))
+    private fun findFitnessDataSources() { // [START find_data_sources]
+        // Note: Fitness.SensorsApi.findDataSources() requires the ACCESS_FINE_LOCATION permission.
+        //val fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_HEART_POINTS).accessActivitySessions(0).build()
+        Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(context1, fitnessOptions))
             .findDataSources(
                 DataSourcesRequest.Builder()
-                    .setDataTypes(DataType.TYPE_STEP_COUNT_DELTA)
+                    .setDataTypes(DataType.TYPE_STEP_COUNT_CUMULATIVE)
                     .setDataSourceTypes(DataSource.TYPE_RAW)
                     .build())
             .addOnSuccessListener { dataSources ->
-                Log.i(TAG, "Data source found: $dataSources")
                 for (dataSource in dataSources) {
                     Log.i(TAG, "Data source found: $dataSource")
                     Log.i(TAG, "Data Source type: " + dataSource.dataType.name)
                     // Let's register a listener to receive Activity data!
-                    if (dataSource.dataType == DataType.TYPE_STEP_COUNT_DELTA && dataPointListener == null) {
+                    if (dataSource.dataType == DataType.TYPE_STEP_COUNT_CUMULATIVE && dataPointListener == null) {
                         Log.i(TAG, "Data source for LOCATION_SAMPLE found!  Registering.")
-                        registerFitnessDataListener(dataSource, DataType.TYPE_STEP_COUNT_DELTA,fitnessOptions)
+
+
+                        val datasource = DataSource.Builder()
+                            .setAppPackageName("com.google.android.gms")
+                            .setDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
+                            .setType(DataSource.TYPE_DERIVED)
+                            .setStreamName("estimated_steps")
+                            .build()
+
+                        Log.i(TAG, "1234: ${datasource}")
+
+                        val listener = OnDataPointListener { dataPoint ->
+                            for (field in dataPoint.dataType.fields) {
+                                val value = dataPoint.getValue(field)
+                                Log.i(TAG, "Detected DataPoint field: ${field.name}")
+                                Log.i(TAG, "Detected DataPoint value: $value")
+                            }
+                        }
+
+                        Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(context1, fitnessOptions))
+                            .add(
+                                SensorRequest.Builder()
+                                    .setDataSource(datasource) // Optional but recommended for custom data sets.
+                                    .setDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE) // Can't be omitted.
+                                    .setSamplingRate(10, TimeUnit.SECONDS)
+                                    .build(),
+                                listener)
+                            .addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    Log.i(TAG, "Listener registered!")
+                                } else {
+                                    Log.e(TAG, "Listener not registered.", task.exception)
+                                }
+                            }
+
                     }
                 }
             }
-            //               Log.v(TAG,dataSources.toString());
-//                dataSources.forEach {
-//                    Log.v(TAG,it.toString());
-//
-//                    if (it.dataType == DataType.TYPE_HEART_RATE_BPM) {
-//                        Log.i(TAG, "Data source for STEP_COUNT_DELTA found!")
-//
-//
-//                    }
-//                }
-//            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Find data sources request failed", e)
+            .addOnFailureListener { e -> Log.e(TAG, "failed", e) }
+        // [END find_data_sources]
+    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+
+
+
+        PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION)
+
+
+
+
+        // findFitnessDataSources()
+
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            // This example shows subscribing to a DataType, across all possible data
+            // sources. Alternatively, a specific DataSource can be used.
+            .subscribe(DataType.TYPE_STEP_COUNT_CUMULATIVE)
+            .addOnSuccessListener {
+                Log.i(TAG, "Successfully subscribed!")
             }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "There was a problem subscribing.", e)
+            }
+
+
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            .listSubscriptions()
+            .addOnSuccessListener { subscriptions ->
+                for (sc in subscriptions) {
+                    val dt = sc.dataType
+                    if (dt != null) {
+                        Log.i(TAG, "Active subscription for data type: ${dt.name}")
+                    }
+                }
+            }
+
+
+        Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            .findDataSources(
+                DataSourcesRequest.Builder()
+                    .setDataTypes(DataType.TYPE_STEP_COUNT_CUMULATIVE)
+                    .setDataSourceTypes(DataSource.TYPE_RAW)
+                    .build())
+            .addOnSuccessListener { dataSources ->
+                Log.i(TAG, "gjkhjhjhj: $dataSources")
+                for (dataSource in dataSources) {
+                    Log.i(TAG, "Data source found: $dataSource")
+                    Log.i(TAG, "Data Source type: " + dataSource.dataType.name)
+                    // Let's register a listener to receive Activity data!
+                    if (dataSource.dataType == DataType.TYPE_STEP_COUNT_CUMULATIVE && dataPointListener == null) {
+                        Log.i(TAG, "Data source for LOCATION_SAMPLE found!  Registering.")
+                        registerFitnessDataListener(dataSource, DataType.TYPE_STEP_COUNT_CUMULATIVE)
+                    }
+                }
+            }
+            .addOnFailureListener { e -> Log.e(TAG, "failed", e) }
 
         return START_NOT_STICKY
     }
@@ -91,16 +175,17 @@ class NewService(): Service() {
 
 
 
-    fun registerFitnessDataListener(dataSource: DataSource, dataType: DataType, fitnessOptions:FitnessOptions) {
+    private fun registerFitnessDataListener(dataSource: DataSource, dataType: DataType) {
         // [START register_data_listener]
         dataPointListener = OnDataPointListener { dataPoint ->
+            Log.i(TAG, "Dasasfasfasfasf: ${dataPoint.dataType}")
             for (field in dataPoint.dataType.fields) {
                 val value = dataPoint.getValue(field)
                 Log.i(TAG, "Detected DataPoint field: ${field.name}")
                 Log.i(TAG, "Detected DataPoint value: $value")
             }
         }
-        Fitness.getSensorsClient(context1,  GoogleSignIn.getAccountForExtension(context1, fitnessOptions))
+        Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
             .add(
                 SensorRequest.Builder()
                     .setDataSource(dataSource) // Optional but recommended for custom data sets.
