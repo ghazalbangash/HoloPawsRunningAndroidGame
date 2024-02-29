@@ -18,8 +18,11 @@ import com.google.android.gms.fitness.request.DataSourcesRequest
 import com.google.android.gms.fitness.request.OnDataPointListener
 import com.google.android.gms.fitness.request.SensorRequest
 import com.google.android.gms.tasks.Task
+import java.io.OutputStream
+import java.net.Socket
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.Scanner
 import java.util.concurrent.TimeUnit
 
 
@@ -31,15 +34,16 @@ class NewService(): Service() {
 
 
 
+
     //val acc = GoogleSignIn.requestPermissions(context1,GOOGLE_FIT_PERMISSIONS_REQUEST_CODE,GoogleSignIn.getAccountForExtension(context1, fitnessOptions),fitnessOptions)
     var dataPointListener: OnDataPointListener? = null
     var fitnessOptions = FitnessOptions.builder()
         .addDataType(DataType.TYPE_ACTIVITY_SEGMENT)
-        .addDataType(DataType.TYPE_HEART_POINTS)
+        .addDataType(DataType.TYPE_HEART_RATE_BPM)
         .addDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
         .addDataType(DataType.TYPE_LOCATION_SAMPLE).accessActivitySessions(0)
         .build()
-
+//
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "running onCreate")
@@ -145,7 +149,6 @@ class NewService(): Service() {
             .findDataSources(
                 DataSourcesRequest.Builder()
                     .setDataTypes(DataType.TYPE_STEP_COUNT_CUMULATIVE)
-                    .setDataSourceTypes(DataSource.TYPE_RAW)
                     .build())
             .addOnSuccessListener { dataSources ->
                 Log.i(TAG, "gjkhjhjhj: $dataSources")

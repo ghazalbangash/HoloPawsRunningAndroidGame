@@ -1,6 +1,7 @@
 package com.example.myFitHololenzApp
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.Service
 import android.content.Intent
@@ -18,6 +19,7 @@ import androidx.lifecycle.Observer
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.myFitHololenzApp.databinding.ActivityMainBinding
@@ -28,16 +30,21 @@ import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataSource
 import com.google.android.gms.fitness.data.DataType
 import com.google.android.gms.fitness.request.DataSourcesRequest
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.net.InetSocketAddress
+import java.net.Socket
 
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
-    var GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 123456
+    var GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 0x1001
     val REQUEST_CODE = 1
     private val TAG = "MyActivity"
     private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_LOCATION_SAMPLE).build()
+
 
 
 
@@ -52,8 +59,6 @@ class MainActivity : AppCompatActivity() {
 
 
 
-
-
         if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
             GoogleSignIn.requestPermissions(
                 this, // your activity
@@ -65,15 +70,34 @@ class MainActivity : AppCompatActivity() {
 //            accessGoogleFit(fitnessOptions)
 //
 //        }
+
+
+
+
+
         setFitnessOption();
         checkFitInstalled();
 
 
         binding.root.findViewById<Button>(R.id.button1).setOnClickListener { view ->
+
+            Log.v(TAG, "index=" + 1);
             val serviceIntent = Intent(this, NewService::class.java)
 
             startService(serviceIntent)
             //test123()
+
+        }
+
+        binding.root.findViewById<Button>(R.id.button2).setOnClickListener { view ->
+
+            setOnwTimeWorkRequest()
+
+
+        }
+
+        binding.root.findViewById<Button>(R.id.button3).setOnClickListener { view ->
+
 
         }
 
@@ -94,7 +118,15 @@ class MainActivity : AppCompatActivity() {
 
     }
 
+    @SuppressLint("SuspiciousIndentation")
+    private fun setOnwTimeWorkRequest(){
 
+        val uploadRequest = OneTimeWorkRequest.Builder(HololensClient::class.java)
+            .build()
+        val workManager = WorkManager.getInstance(applicationContext)
+        workManager.enqueue(uploadRequest)
+
+    }
     fun test123(){
 
         var fitnessOptions = FitnessOptions.builder()
