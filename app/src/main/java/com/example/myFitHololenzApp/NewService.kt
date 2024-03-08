@@ -8,18 +8,23 @@ import android.os.IBinder
 import android.util.Log
 import androidx.annotation.Nullable
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.MutableLiveData
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptionsExtension
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataSource
 import com.google.android.gms.fitness.data.DataType
+import com.google.android.gms.fitness.data.Value
 import com.google.android.gms.fitness.request.DataSourcesRequest
 import com.google.android.gms.fitness.request.OnDataPointListener
 import com.google.android.gms.fitness.request.SensorRequest
 import com.google.android.gms.tasks.Task
+import java.io.IOException
+import java.io.ObjectOutputStream
 import java.io.OutputStream
 import java.net.Socket
+import java.nio.charset.Charset
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Scanner
@@ -31,7 +36,15 @@ class NewService(): Service() {
 
     private val context1 = this
     private val TAG = "thread"
+    var dataValue: Int = 0
+    val dataLiveData = MutableLiveData<Int>()
 
+
+    // socket variables
+    val address = "10.190.35.107"
+    val port = 8080
+    //val connection: Socket = Socket(address, port)
+    //var connected: Boolean = true
 
 
 
@@ -43,12 +56,37 @@ class NewService(): Service() {
         .addDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
         .addDataType(DataType.TYPE_LOCATION_SAMPLE).accessActivitySessions(0)
         .build()
-//
+
+
+
+// server in service
+
+
+
+    //end of server function
+
+
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "running onCreate")
     }
 
+    fun sendData(fields: Map<String, Value>) {
+        val thread = Thread {
+            try {
+                val socket = Socket("10.190.35.107", 8080)
+                val oos = ObjectOutputStream(socket.getOutputStream())
+                for ((key, value) in fields) {
+                    oos.writeObject("$key = $value")
+                }
+
+                oos.close()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+        thread.start()
+    }
 
     private fun findFitnessDataSources() { // [START find_data_sources]
         // Note: Fitness.SensorsApi.findDataSources() requires the ACCESS_FINE_LOCATION permission.
@@ -75,13 +113,14 @@ class NewService(): Service() {
                             .setStreamName("estimated_steps")
                             .build()
 
-                        Log.i(TAG, "1234: ${datasource}")
 
                         val listener = OnDataPointListener { dataPoint ->
                             for (field in dataPoint.dataType.fields) {
                                 val value = dataPoint.getValue(field)
+                                dataValue = value as Int
                                 Log.i(TAG, "Detected DataPoint field: ${field.name}")
-                                Log.i(TAG, "Detected DataPoint value: $value")
+                                Log.i(TAG, "Detected DataPoint value: $dataValue")
+                                dataLiveData.postValue(dataValue)
                             }
                         }
 
@@ -182,11 +221,19 @@ class NewService(): Service() {
         // [START register_data_listener]
         dataPointListener = OnDataPointListener { dataPoint ->
             Log.i(TAG, "Dasasfasfasfasf: ${dataPoint.dataType}")
+//            val writer: OutputStream = connection.getOutputStream()
+            val fields: HashMap<String, Value> = HashMap()
+
             for (field in dataPoint.dataType.fields) {
                 val value = dataPoint.getValue(field)
                 Log.i(TAG, "Detected DataPoint field: ${field.name}")
-                Log.i(TAG, "Detected DataPoint value: $value")
+                Log.i(TAG, "Detected DataPoint value11: $value")
+                //writer.write(("hellooo" + '\n').toByteArray(Charset.defaultCharset()))
+                Log.i(TAG, "inside writer: $value")
+                fields[field.name] = value
             }
+
+            sendData(fields)
         }
         Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
             .add(

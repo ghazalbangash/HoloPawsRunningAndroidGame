@@ -2,8 +2,6 @@ package com.example.myFitHololenzApp
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.AlertDialog
-import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -11,28 +9,22 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
-import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.lifecycle.Observer
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.work.OneTimeWorkRequest
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.myFitHololenzApp.databinding.ActivityMainBinding
 import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataSource
 import com.google.android.gms.fitness.data.DataType
 import com.google.android.gms.fitness.request.DataSourcesRequest
-import java.io.DataInputStream
-import java.io.DataOutputStream
-import java.net.InetSocketAddress
+import java.io.IOException
+import java.io.ObjectOutputStream
 import java.net.Socket
 
 
@@ -81,11 +73,17 @@ class MainActivity : AppCompatActivity() {
 
         binding.root.findViewById<Button>(R.id.button1).setOnClickListener { view ->
 
-            Log.v(TAG, "index=" + 1);
+            //val connection: Socket = Socket(address, port)
+            //val writer: OutputStream = connection.getOutputStream()
+           // writer.write(("hellooo" + '\n').toByteArray(Charset.defaultCharset()))
+
+//            Log.v(TAG, "index=" + 1);
             val serviceIntent = Intent(this, NewService::class.java)
 
             startService(serviceIntent)
-            //test123()
+//            //test123()
+
+
 
         }
 
@@ -117,6 +115,8 @@ class MainActivity : AppCompatActivity() {
 
 
     }
+
+
 
     @SuppressLint("SuspiciousIndentation")
     private fun setOnwTimeWorkRequest(){

@@ -11,6 +11,7 @@ import java.io.DataOutputStream
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 import java.nio.charset.Charset
 import java.util.Scanner
@@ -24,58 +25,36 @@ import kotlin.concurrent.thread
 ////    client.run()
 //}
 class HololensClient(context : Context, params : WorkerParameters): Worker(context,params){
-    val address = "10.190.33.114"
-    val port = 139
+    val address = "10.190.35.107"
+    val port = 8080
     private val TAG = "thread"
-//    private val connection: Socket = Socket(address, port)
-//    private var connected: Boolean = true
-
-//    init {
-//        println("Connected to server at $address on port $port")
-//    }
-
-//    private val reader: Scanner = Scanner(connection.getInputStream())
-//    private val writer: OutputStream = connection.getOutputStream()
+    val connection: Socket = Socket(address, port)
+    var connected: Boolean = true
+    private val context1 = this
     override fun doWork(): Result {
-        Log.i(TAG, "running onCreate")
-        val connection: Socket = Socket(address, port)
-        var connected: Boolean = true
         val reader: Scanner = Scanner(connection.getInputStream())
         val writer: OutputStream = connection.getOutputStream()
-        thread { println(reader.nextLine()) }
+
+        val data = NewService().dataLiveData.value
+//        thread { println(reader.nextLine()) }
         while (connected) {
-            val input = readLine() ?: ""
-            if ("exit" in input) {
-                connected = false
-                reader.close()
-                connection.close()
-            } else {
-                writer.write(("message" + '\n').toByteArray(Charset.defaultCharset()))
-            }
-    }
-        return Result.success()
-    }
-//    fun connectinToServer() {
-//        println("Connected entera")
-//        thread { read() }
-//        while (connected) {
 //            val input = readLine() ?: ""
 //            if ("exit" in input) {
 //                connected = false
 //                reader.close()
 //                connection.close()
+//                Log.i(TAG, "running reader")
 //            } else {
-//                write(input)
-//            }
-//        }
+                writer.write(("hellooo" + '\n').toByteArray(Charset.defaultCharset()))
+                Log.i(TAG, "inside writer: $data")
+            }
+
+        return Result.success()
+    }
+
+//    fun newDataArrived(var data){
+
+//    }
 
     }
 
-//    private fun write(message: String) {
-//        writer.write((message + '\n').toByteArray(Charset.defaultCharset()))
-//    }
-//
-//    private fun read() {
-//        while (connected)
-//            println(reader.nextLine())
-//    }
