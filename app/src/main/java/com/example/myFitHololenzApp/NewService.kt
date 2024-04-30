@@ -20,9 +20,11 @@ import com.google.android.gms.fitness.request.DataSourcesRequest
 import com.google.android.gms.fitness.request.OnDataPointListener
 import com.google.android.gms.fitness.request.SensorRequest
 import com.google.android.gms.tasks.Task
+import java.io.BufferedWriter
 import java.io.IOException
 import java.io.ObjectOutputStream
 import java.io.OutputStream
+import java.io.OutputStreamWriter
 import java.net.Socket
 import java.nio.charset.Charset
 import java.time.LocalDateTime
@@ -72,21 +74,34 @@ class NewService(): Service() {
     }
 
     fun sendData(fields: Map<String, Value>) {
+
         val thread = Thread {
             try {
-                val socket = Socket("10.190.35.107", 8080)
-                val oos = ObjectOutputStream(socket.getOutputStream())
+                val socket = Socket("10.150.45.159", 9090)
+                //val oos = ObjectOutputStream(socket.getOutputStream())
+                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream(), "UTF-8"))
                 for ((key, value) in fields) {
-                    oos.writeObject("$key = $value")
+                    writer.write("$value")
+
+//                    oos.flush();
+//                    oos.reset();
+//                    oos.writeObject("hello")
+
+
+                    //oos.writeObject("$key = $value")
                 }
 
-                oos.close()
+                writer.close()
             } catch (e: IOException) {
                 e.printStackTrace()
             }
         }
         thread.start()
     }
+
+
+
+
 
     private fun findFitnessDataSources() { // [START find_data_sources]
         // Note: Fitness.SensorsApi.findDataSources() requires the ACCESS_FINE_LOCATION permission.
@@ -234,6 +249,7 @@ class NewService(): Service() {
             }
 
             sendData(fields)
+
         }
         Fitness.getSensorsClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
             .add(
