@@ -18,6 +18,7 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkManager
 import com.example.myFitHololenzApp.databinding.ActivityMainBinding
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataSource
@@ -37,7 +38,13 @@ class MainActivity : AppCompatActivity() {
     private val TAG = "MyActivity"
     private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_LOCATION_SAMPLE).build()
 
-
+    val fitnessOptions2 = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestEmail()
+        .requestScopes(
+            Fitness.SCOPE_BODY_READ_WRITE,
+            Fitness.SCOPE_ACTIVITY_READ_WRITE
+        )
+        .build()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,7 +96,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.root.findViewById<Button>(R.id.button2).setOnClickListener { view ->
 
-            setOnwTimeWorkRequest()
+            //setOnwTimeWorkRequest()
 
 
         }
@@ -118,15 +125,15 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    @SuppressLint("SuspiciousIndentation")
-    private fun setOnwTimeWorkRequest(){
-
-        val uploadRequest = OneTimeWorkRequest.Builder(HololensClient::class.java)
-            .build()
-        val workManager = WorkManager.getInstance(applicationContext)
-        workManager.enqueue(uploadRequest)
-
-    }
+//    @SuppressLint("SuspiciousIndentation")
+//    private fun setOnwTimeWorkRequest(){
+//
+//        val uploadRequest = OneTimeWorkRequest.Builder(HololensClient::class.java)
+//            .build()
+//        val workManager = WorkManager.getInstance(applicationContext)
+//        workManager.enqueue(uploadRequest)
+//
+//    }
     fun test123(){
 
         var fitnessOptions = FitnessOptions.builder()

@@ -17,7 +17,6 @@
     <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
     <uses-permission android:name="com.google.heart_minutes.WRITE_STEPS"/>
 
-
     <uses-permission android:name="android.permission.TYPE_STEP_COUNT_DELTA"/>
 
 
