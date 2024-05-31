@@ -73,6 +73,17 @@ class NewService : Service() {
     }
 
     private fun registerHeartRateListener(account: GoogleSignInAccount) {
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            // This example shows subscribing to a DataType, across all possible data
+            // sources. Alternatively, a specific DataSource can be used.
+            .subscribe(DataType.TYPE_HEART_RATE_BPM)
+            .addOnSuccessListener {
+                Log.i(TAG, "Successfully subscribed!")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "There was a problem subscribing.", e)
+            }
+
         heartRateListener = OnDataPointListener { dataPoint ->
             for (field in dataPoint.dataType.fields) {
                 val value = dataPoint.getValue(field).asFloat()
@@ -146,20 +157,40 @@ class NewService : Service() {
     }
 
     private fun accessGoogleFit(account: GoogleSignInAccount) {
+
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            // This example shows subscribing to a DataType, across all possible data
+            // sources. Alternatively, a specific DataSource can be used.
+            .subscribe(DataType.TYPE_HEART_RATE_BPM)
+            .addOnSuccessListener {
+                Log.i(TAG, "Successfully subscribed here !")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "There was a problem subscribing.", e)
+            }
+
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - TimeUnit.HOURS.toMillis(1)  // Fetch data from the past hour
+
+        Log.i(TAG, "Fetching data from $startTime to $endTime")
+
         val readRequest = DataReadRequest.Builder()
             .read(DataType.TYPE_HEART_RATE_BPM)
-            .setTimeRange(1, System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+            .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
             .build()
 
         Fitness.getHistoryClient(this, account)
             .readData(readRequest)
-            .addOnSuccessListener { response ->
-                val heartRateData = response.getDataSet(DataType.TYPE_HEART_RATE_BPM)
-                Log.i(TAG, "Detected heart rate: $heartRateData")
-                //sendHeartRateToServer(heartRateData)
+            .addOnSuccessListener { dataReadResponse ->
+                Log.i(TAG, "Data read successfully: ${dataReadResponse.dataSets.size} datasets")
+                val heartRateData = dataReadResponse.getDataSet(DataType.TYPE_HEART_RATE_BPM)
+                Log.i(TAG, "heart rate: $heartRateData datasets")
+                for (dataSet in dataReadResponse.dataSets) {
+                    processDataSet(dataSet)
+                }
             }
             .addOnFailureListener { e ->
-                e.printStackTrace()
+                Log.e(TAG, "Failed to read data", e)
             }
     }
 
@@ -167,7 +198,7 @@ class NewService : Service() {
         for (dp in dataSet.dataPoints) {
             for (field in dp.dataType.fields) {
                 val value = dp.getValue(field).asFloat()
-                Log.i(TAG, "Detected heart rate: $value")
+                Log.i(TAG, "Detected heart rate1: $value")
                 //sendData("heart_rate", value)
             }
         }
