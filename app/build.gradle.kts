@@ -41,6 +41,7 @@ android {
 
 dependencies {
 
+    implementation(files("C:\\Users\\ghazal\\Downloads\\android-fit-20150719.jar"))
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:1.2.2")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.8.0")
@@ -54,3 +55,5 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:20.6.0")
     implementation ("androidx.work:work-runtime-ktx:2.7.1")
 }
+
+

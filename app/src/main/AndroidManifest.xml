@@ -15,9 +15,14 @@
     <uses-permission android:name="android.permission.health.TYPE_HEART_RATE_BPM"/>
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
-    <uses-permission android:name="com.google.heart_minutes.WRITE_STEPS"/>
+    <uses-permission android:name="com.google.heart_rate.summary"/>
 
     <uses-permission android:name="android.permission.TYPE_STEP_COUNT_DELTA"/>
+
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.BODY_SENSORS"/>
 
 
 
@@ -41,7 +46,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
-
+                <action android:name="vnd.google.fitness.VIEW" />
+                <data android:mimeType="vnd.google.fitness.data_type/com.google.step_count.cumulative" />
+                <data android:mimeType="vnd.google.fitness.data_type/com.google.heart_rate.summary" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

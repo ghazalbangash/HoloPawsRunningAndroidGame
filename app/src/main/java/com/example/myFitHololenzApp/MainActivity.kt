@@ -71,9 +71,6 @@ class MainActivity : AppCompatActivity() {
 //        }
 
 
-
-
-
         setFitnessOption();
         checkFitInstalled();
 
@@ -86,6 +83,18 @@ class MainActivity : AppCompatActivity() {
 
 //            Log.v(TAG, "index=" + 1);
             val serviceIntent = Intent(this, NewService::class.java)
+            val supportedType = DataType.getMimeType(DataType.AGGREGATE_HEART_RATE_SUMMARY)
+
+
+            if (Intent.ACTION_VIEW == intent.action && supportedType == intent.type) {
+                // Get the intent extras
+                val startTime = intent.getLongExtra("vnd.google.gms.fitness.start_time", 0L)
+                val endTime = intent.getLongExtra("vnd.google.gms.fitness.end_time", 0L)
+                val dataSource = intent.getParcelableExtra<DataSource>("vnd.google.gms.fitness.data_source")
+
+                // Process the data
+                Log.i("IntentData", "Start time: $startTime, End time: $endTime, Data Source: $dataSource")
+            }
 
             startService(serviceIntent)
 //            //test123()
