@@ -45,6 +45,9 @@ class NewService : Service() {
     private var heartRateListener: OnDataPointListener? = null
     private var stepCountListener: OnDataPointListener? = null
 
+    private var lastStepCount = 0
+    private var lastTimestamp = System.currentTimeMillis()
+
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Service created")
@@ -109,6 +112,50 @@ class NewService : Service() {
     }
 
     private fun registerStepCountListener(account: GoogleSignInAccount) {
+
+        stepCountListener = OnDataPointListener { dataPoint ->
+            for (field in dataPoint.dataType.fields) {
+                val value = dataPoint.getValue(field).asInt()
+                Log.i(TAG, "Detected step count: $value")
+
+
+
+                val currentStepCount = dataPoint.getValue(field).asInt()
+                val currentTimestamp = System.currentTimeMillis()
+
+                // Calculate cadence
+                val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
+                val stepDifference = currentStepCount - lastStepCount
+                val cadence = if (timeDifference > 0) (stepDifference / (timeDifference / 60.0)) else 0.0
+
+                Log.i(TAG, "Detected step count: $currentStepCount, Cadence: $cadence steps/min")
+
+                lastStepCount = currentStepCount
+                lastTimestamp = currentTimestamp
+
+                sendData(mapOf("step_count" to dataPoint.getValue(field)))
+                sendData(mapOf("cadence" to cadence))
+
+            }
+        }
+
+        val sensorRequest = SensorRequest.Builder()
+            .setDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
+            .setSamplingRate(10, TimeUnit.SECONDS)
+            .build()
+
+        Fitness.getSensorsClient(this, account)
+            .add(sensorRequest, stepCountListener!!)
+            .addOnSuccessListener {
+                Log.i(TAG, "Step count listener registered")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to register step count listener", e)
+            }
+    }
+
+
+    private fun registerStepCountCadenceListener(account: GoogleSignInAccount) {
 
         stepCountListener = OnDataPointListener { dataPoint ->
             for (field in dataPoint.dataType.fields) {
@@ -221,7 +268,7 @@ class NewService : Service() {
 
 
 
-    private fun sendData(fields: Map<String, Value>) {
+    private fun sendData(fields: Map<String, Any>) {
         Thread {
             try {
                 val socket = Socket("10.150.34.218", 9090)
