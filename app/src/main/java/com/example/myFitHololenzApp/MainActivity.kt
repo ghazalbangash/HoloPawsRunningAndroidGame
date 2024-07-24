@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
+import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.navigation.findNavController
@@ -37,6 +38,9 @@ class MainActivity : AppCompatActivity() {
     val REQUEST_CODE = 1
     private val TAG = "MyActivity"
     private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_LOCATION_SAMPLE).build()
+    lateinit var StepInput: EditText
+    lateinit var AgeInput: EditText
+    lateinit var HeightInput: EditText
 
     val fitnessOptions2 = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestEmail()
@@ -55,6 +59,9 @@ class MainActivity : AppCompatActivity() {
         //setContentView(R.layout.activity_main)
 
         val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
+        StepInput = findViewById(R.id.stepsInput)
+        AgeInput = findViewById(R.id.ageInput)
+        HeightInput = findViewById(R.id.HeightInput)
 
 
 
@@ -71,6 +78,9 @@ class MainActivity : AppCompatActivity() {
 //        }
 
 
+
+
+
         setFitnessOption();
         checkFitInstalled();
 
@@ -79,22 +89,18 @@ class MainActivity : AppCompatActivity() {
 
             //val connection: Socket = Socket(address, port)
             //val writer: OutputStream = connection.getOutputStream()
-           // writer.write(("hellooo" + '\n').toByteArray(Charset.defaultCharset()))
+            // writer.write(("hellooo" + '\n').toByteArray(Charset.defaultCharset()))
+            val steps = StepInput.text.toString()
+            val age = AgeInput.text.toString()
+            val height = HeightInput.text.toString()
 
 //            Log.v(TAG, "index=" + 1);
             val serviceIntent = Intent(this, NewService::class.java)
-            val supportedType = DataType.getMimeType(DataType.AGGREGATE_HEART_RATE_SUMMARY)
 
-
-            if (Intent.ACTION_VIEW == intent.action && supportedType == intent.type) {
-                // Get the intent extras
-                val startTime = intent.getLongExtra("vnd.google.gms.fitness.start_time", 0L)
-                val endTime = intent.getLongExtra("vnd.google.gms.fitness.end_time", 0L)
-                val dataSource = intent.getParcelableExtra<DataSource>("vnd.google.gms.fitness.data_source")
-
-                // Process the data
-                Log.i("IntentData", "Start time: $startTime, End time: $endTime, Data Source: $dataSource")
-            }
+            // Add user inputs as extras
+            serviceIntent.putExtra("steps", steps)
+            serviceIntent.putExtra("age", age)
+            serviceIntent.putExtra("height", height)
 
             startService(serviceIntent)
 //            //test123()
@@ -106,6 +112,10 @@ class MainActivity : AppCompatActivity() {
         binding.root.findViewById<Button>(R.id.button2).setOnClickListener { view ->
 
             //setOnwTimeWorkRequest()
+            //Log.v(TAG, "index=" + textInput.text);
+            println(AgeInput.text)
+            println(HeightInput.text)
+            println(StepInput.text)
 
 
         }
@@ -134,7 +144,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-//    @SuppressLint("SuspiciousIndentation")
+    //    @SuppressLint("SuspiciousIndentation")
 //    private fun setOnwTimeWorkRequest(){
 //
 //        val uploadRequest = OneTimeWorkRequest.Builder(HololensClient::class.java)

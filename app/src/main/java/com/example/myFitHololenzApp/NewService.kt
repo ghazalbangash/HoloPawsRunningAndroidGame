@@ -26,34 +26,36 @@ import java.net.Socket
 import java.util.concurrent.TimeUnit
 
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.fitness.HistoryApi
 import com.google.android.gms.fitness.data.DataSet
 import com.google.android.gms.fitness.request.DataReadRequest
-import java.util.Calendar
-
 
 class NewService : Service() {
 
-
     private val TAG = "server"
     private val fitnessOptions = FitnessOptions.builder()
-        .addDataType(DataType.TYPE_HEART_RATE_BPM,FitnessOptions.ACCESS_READ)
+        .addDataType(DataType.TYPE_HEART_RATE_BPM)
         .addDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
-        //.addDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
         .build()
 
     private var heartRateListener: OnDataPointListener? = null
     private var stepCountListener: OnDataPointListener? = null
 
     private var lastStepCount = 0
+    private var totalSteps = 0
     private var lastTimestamp = System.currentTimeMillis()
+
+    // Member variables to store user inputs and a flag to check if they have been sent
+    private var steps: String? = null
+    private var age: String? = null
+    private var height: String? = null
+    private var userInputsSent = false
+
+    private var socket: Socket? = null
+    private var writer: BufferedWriter? = null
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Service created")
-
-
-
 
         // Check for necessary permissions
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
@@ -63,17 +65,25 @@ class NewService : Service() {
         }
 
         val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
-
-
-
         registerHeartRateListener(account)
         registerStepCountListener(account)
         accessGoogleFit(account)
-        //accessGoogleFit2(account)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "Service started")
+
+
+        // Retrieve the user inputs from the Intent if they haven't been set yet
+        if (steps == null || age == null || height == null) {
+            steps = intent?.getStringExtra("steps")
+            age = intent?.getStringExtra("age")
+            height = intent?.getStringExtra("height")
+
+            // Use the retrieved data (for example, log it)
+            Log.i(TAG, "Received data - Steps: $steps, Age: $age, Height: $height")
+        }
+
         return START_NOT_STICKY
     }
 
@@ -88,6 +98,17 @@ class NewService : Service() {
     }
 
     private fun registerHeartRateListener(account: GoogleSignInAccount) {
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            // This example shows subscribing to a DataType, across all possible data
+            // sources. Alternatively, a specific DataSource can be used.
+            .subscribe(DataType.TYPE_HEART_RATE_BPM)
+            .addOnSuccessListener {
+                Log.i(TAG, "Successfully subscribed!")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "There was a problem subscribing.", e)
+            }
+
         heartRateListener = OnDataPointListener { dataPoint ->
             for (field in dataPoint.dataType.fields) {
                 val value = dataPoint.getValue(field).asFloat()
@@ -112,56 +133,38 @@ class NewService : Service() {
     }
 
     private fun registerStepCountListener(account: GoogleSignInAccount) {
-
         stepCountListener = OnDataPointListener { dataPoint ->
             for (field in dataPoint.dataType.fields) {
-                val value = dataPoint.getValue(field).asInt()
-                Log.i(TAG, "Detected step count: $value")
-
-
-
                 val currentStepCount = dataPoint.getValue(field).asInt()
                 val currentTimestamp = System.currentTimeMillis()
 
+                if (lastStepCount == 0) {
+                    lastStepCount = currentStepCount
+                    lastTimestamp = currentTimestamp
+                    Log.i(TAG, "Initial step count: $currentStepCount")
+                    return@OnDataPointListener
+                }
+
+                // Calculate step difference
+                val stepDifference = currentStepCount - lastStepCount
+                Log.i(TAG, "total step: $totalSteps, step dif : $stepDifference")
+                Log.i(TAG, "curstep: $currentStepCount, last : $lastStepCount")
+
+                if (stepDifference > 0) {
+                    totalSteps += stepDifference
+                    Log.i(TAG, "step diff: $stepDifference, total: $totalSteps")
+                }
                 // Calculate cadence
                 val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
-                val stepDifference = currentStepCount - lastStepCount
                 val cadence = if (timeDifference > 0) (stepDifference / (timeDifference / 60.0)) else 0.0
 
-                Log.i(TAG, "Detected step count: $currentStepCount, Cadence: $cadence steps/min")
+                Log.i(TAG, "Detected step count: $currentStepCount, Cadence: $cadence steps/min, stepDifference: $stepDifference")
 
                 lastStepCount = currentStepCount
                 lastTimestamp = currentTimestamp
 
-                sendData(mapOf("step_count" to dataPoint.getValue(field)))
-                sendData(mapOf("cadence" to cadence))
-
-            }
-        }
-
-        val sensorRequest = SensorRequest.Builder()
-            .setDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
-            .setSamplingRate(10, TimeUnit.SECONDS)
-            .build()
-
-        Fitness.getSensorsClient(this, account)
-            .add(sensorRequest, stepCountListener!!)
-            .addOnSuccessListener {
-                Log.i(TAG, "Step count listener registered")
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Failed to register step count listener", e)
-            }
-    }
-
-
-    private fun registerStepCountCadenceListener(account: GoogleSignInAccount) {
-
-        stepCountListener = OnDataPointListener { dataPoint ->
-            for (field in dataPoint.dataType.fields) {
-                val value = dataPoint.getValue(field).asInt()
-                Log.i(TAG, "Detected step count: $value")
-                sendData(mapOf("step_count" to dataPoint.getValue(field)))
+                // Send both step count and cadence
+                sendData(totalSteps, cadence)
             }
         }
 
@@ -206,60 +209,47 @@ class NewService : Service() {
 
     private fun accessGoogleFit(account: GoogleSignInAccount) {
 
-        val calendar = Calendar.getInstance()
-        val endTime = calendar.timeInMillis
-        calendar.add(Calendar.MINUTE, -30)
-        val startTime = calendar.timeInMillis
+        Fitness.getRecordingClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            // This example shows subscribing to a DataType, across all possible data
+            // sources. Alternatively, a specific DataSource can be used.
+            .subscribe(DataType.TYPE_HEART_RATE_BPM)
+            .addOnSuccessListener {
+                Log.i(TAG, "Successfully subscribed here !")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "There was a problem subscribing.", e)
+            }
 
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - TimeUnit.HOURS.toMillis(1)  // Fetch data from the past hour
 
+        Log.i(TAG, "Fetching data from $startTime to $endTime")
 
         val readRequest = DataReadRequest.Builder()
             .read(DataType.TYPE_HEART_RATE_BPM)
-            .setTimeRange(1, System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+            .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
             .build()
 
         Fitness.getHistoryClient(this, account)
             .readData(readRequest)
-            .addOnSuccessListener { response ->
-                val heartRateData = response.getDataSet(DataType.TYPE_HEART_RATE_BPM)
-                processDataSet(heartRateData)
-                Log.i(TAG, "Detected heart rate: $heartRateData")
-                //sendHeartRateToServer(heartRateData)
+            .addOnSuccessListener { dataReadResponse ->
+                Log.i(TAG, "Data read successfully: ${dataReadResponse.dataSets.size} datasets")
+                val heartRateData = dataReadResponse.getDataSet(DataType.TYPE_HEART_RATE_BPM)
+                Log.i(TAG, "heart rate: $heartRateData datasets")
+                for (dataSet in dataReadResponse.dataSets) {
+                    processDataSet(dataSet)
+                }
             }
             .addOnFailureListener { e ->
-                e.printStackTrace()
+                Log.e(TAG, "Failed to read data", e)
             }
     }
-
-
-    private fun accessGoogleFit2(account: GoogleSignInAccount) {
-        val calendar = Calendar.getInstance()
-        val endTime = calendar.timeInMillis
-        calendar.add(Calendar.MINUTE, -30)
-        val startTime = calendar.timeInMillis
-        Log.i(TAG, "here2")
-
-        // Build the intent for viewing heart rate data
-        val fitIntent = HistoryApi.ViewIntentBuilder(this, DataType.AGGREGATE_HEART_RATE_SUMMARY)
-            .setTimeInterval(startTime, endTime, TimeUnit.MILLISECONDS)
-            .setPreferredApplication("com.xiaomi.hm.health")
-            .build()
-
-        startActivity(fitIntent)
-    }
-
-
 
     private fun processDataSet(dataSet: DataSet) {
         for (dp in dataSet.dataPoints) {
-
-            val dataSource = dp.originalDataSource
-            val appPkgName = dataSource.appPackageName
-            // Use appPkgName as needed
-            Log.d("AppPackageName", "Data inserted by: $appPkgName")
             for (field in dp.dataType.fields) {
                 val value = dp.getValue(field).asFloat()
-                Log.i(TAG, "Detected heart rate: $value")
+                Log.i(TAG, "Detected heart rate1: $value")
                 //sendData("heart_rate", value)
             }
         }
@@ -268,20 +258,44 @@ class NewService : Service() {
 
 
 
-    private fun sendData(fields: Map<String, Any>) {
+    private fun sendData(stepCount: Int, cadence: Double) {
         Thread {
             try {
-                val socket = Socket("10.150.34.218", 9090)
-                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream(), "UTF-8"))
-                for ((_, value) in fields) {
-                    writer.write("$value\n")
+                if (socket == null || socket!!.isClosed) {
+                    socket = Socket("10.150.34.177", 9090)
+                    writer = BufferedWriter(OutputStreamWriter(socket!!.getOutputStream(), "UTF-8"))
                 }
-                writer.flush()
-                writer.close()
-                socket.close()
+
+                // Send user inputs only once
+                if (!userInputsSent && steps != null && age != null && height != null) {
+                    writer!!.write("Steps: $steps, Age: $age, Height: $height, $stepCount,$cadence\n")
+                    writer!!.flush()
+                    userInputsSent = true // Mark user inputs as sent
+                } else {
+                    writer!!.write("$stepCount,$cadence\n")
+                    writer!!.flush()
+                }
             } catch (e: IOException) {
                 Log.e(TAG, "Error sending data", e)
+                // Optionally, close socket and writer on error
+                try {
+                    writer?.close()
+                    socket?.close()
+                } catch (closeException: IOException) {
+                    Log.e(TAG, "Error closing socket", closeException)
+                }
             }
         }.start()
     }
+    // Don't forget to properly close the socket and writer when they are no longer needed
+    fun closeConnection() {
+        try {
+            writer?.close()
+            socket?.close()
+        } catch (e: IOException) {
+            Log.e(TAG, "Error closing socket", e)
+        }
+    }
 }
+
+
