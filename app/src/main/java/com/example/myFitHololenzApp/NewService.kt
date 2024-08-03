@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
 import android.os.IBinder
 import android.util.Log
 import androidx.annotation.Nullable
@@ -28,6 +29,11 @@ import java.util.concurrent.TimeUnit
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.fitness.data.DataSet
 import com.google.android.gms.fitness.request.DataReadRequest
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
 
 class NewService : Service() {
 
@@ -52,22 +58,37 @@ class NewService : Service() {
 
     private var socket: Socket? = null
     private var writer: BufferedWriter? = null
+    private val REQUEST_LOCATION_PERMISSION = 1
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationCallback: LocationCallback
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Service created")
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        // Check for necessary permissions
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "BODY_SENSORS permission not granted")
-            // Handle the case where permission is not granted
-            return
+        // Initialize the LocationCallback
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                for (location in locationResult.locations) {
+                    Log.i(TAG, "Location: ${location.latitude}, ${location.longitude}")
+                    //sendLocationData(location.latitude, location.longitude)
+                }
+            }
         }
 
+        // Check for necessary permissions
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED ||
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Necessary permissions not granted")
+            return
+        }
         val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
         registerHeartRateListener(account)
         registerStepCountListener(account)
         accessGoogleFit(account)
+        startLocationUpdates()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -262,13 +283,13 @@ class NewService : Service() {
         Thread {
             try {
                 if (socket == null || socket!!.isClosed) {
-                    socket = Socket("10.150.34.177", 9090)
+                    socket = Socket("10.150.33.84", 9090)
                     writer = BufferedWriter(OutputStreamWriter(socket!!.getOutputStream(), "UTF-8"))
                 }
 
                 // Send user inputs only once
                 if (!userInputsSent && steps != null && age != null && height != null) {
-                    writer!!.write("Steps: $steps, Age: $age, Height: $height, $stepCount,$cadence\n")
+                    writer!!.write("Steps: $steps, Age: $age, Weight: $height, $stepCount,$cadence\n")
                     writer!!.flush()
                     userInputsSent = true // Mark user inputs as sent
                 } else {
@@ -296,6 +317,52 @@ class NewService : Service() {
             Log.e(TAG, "Error closing socket", e)
         }
     }
+
+    private fun startLocationUpdates() {
+        val locationRequest = LocationRequest.create().apply {
+            interval = 10000 // 10 seconds
+            fastestInterval = 5000 // 5 seconds
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
+        } else {
+            Log.e(TAG, "Location permissions not granted")
+        }
+    }
+
+    private fun stopLocationUpdates() {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+
+
+
+//    private fun sendLocationData(latitude: Double, longitude: Double) {
+//        Thread {
+//            try {
+//                if (socket == null || socket!!.isClosed) {
+//                    socket = Socket("10.150.32.157", 9090)
+//                    writer = BufferedWriter(OutputStreamWriter(socket!!.getOutputStream(), "UTF-8"))
+//                }
+//                writer!!.write("Location: $latitude, $longitude\n")
+//                writer!!.flush()
+//            } catch (e: IOException) {
+//                Log.e(TAG, "Error sending location data", e)
+//                try {
+//                    writer?.close()
+//                    socket?.close()
+//                } catch (closeException: IOException) {
+//                    Log.e(TAG, "Error closing socket", closeException)
+//                }
+//            }
+//        }.start()
+//    }
+
+
+
+
 }
 
 

@@ -54,6 +54,8 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".PermissionActivity" />
+
         <service android:name=".NewService" />
     </application>
 

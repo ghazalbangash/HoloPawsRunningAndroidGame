@@ -63,7 +63,9 @@ class MainActivity : AppCompatActivity() {
         AgeInput = findViewById(R.id.ageInput)
         HeightInput = findViewById(R.id.HeightInput)
 
-
+        // Start the PermissionActivity to request permissions and then start the service
+        val intent = Intent(this, PermissionActivity::class.java)
+        startActivity(intent)
 
         if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
             GoogleSignIn.requestPermissions(
