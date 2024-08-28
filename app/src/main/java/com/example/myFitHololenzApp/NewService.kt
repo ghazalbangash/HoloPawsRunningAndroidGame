@@ -82,6 +82,7 @@ class NewService : Service() {
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Necessary permissions not granted")
+            // todo add a toast for this message
             return
         }
         val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
@@ -283,7 +284,7 @@ class NewService : Service() {
         Thread {
             try {
                 if (socket == null || socket!!.isClosed) {
-                    socket = Socket("10.150.33.84", 9090)
+                    socket = Socket("10.150.31.59", 9090)
                     writer = BufferedWriter(OutputStreamWriter(socket!!.getOutputStream(), "UTF-8"))
                 }
 

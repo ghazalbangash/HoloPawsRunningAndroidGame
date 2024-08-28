@@ -51,6 +51,8 @@
                 <data android:mimeType="vnd.google.fitness.data_type/com.google.step_count.cumulative" />
                 <data android:mimeType="vnd.google.fitness.data_type/com.google.heart_rate.summary" />
                 <category android:name="android.intent.category.LAUNCHER" />
+
+
             </intent-filter>
         </activity>
 
