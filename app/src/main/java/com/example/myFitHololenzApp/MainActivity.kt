@@ -1,7 +1,7 @@
 package com.example.myFitHololenzApp
 
+
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -9,14 +9,15 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
-import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.navigation.findNavController
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.navigation.ui.AppBarConfiguration
-import androidx.navigation.ui.navigateUp
-import androidx.work.OneTimeWorkRequest
-import androidx.work.WorkManager
 import com.example.myFitHololenzApp.databinding.ActivityMainBinding
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -25,9 +26,13 @@ import com.google.android.gms.fitness.FitnessOptions
 import com.google.android.gms.fitness.data.DataSource
 import com.google.android.gms.fitness.data.DataType
 import com.google.android.gms.fitness.request.DataSourcesRequest
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
+import java.io.File
+import java.io.FileWriter
 import java.io.IOException
-import java.io.ObjectOutputStream
-import java.net.Socket
+
+
 
 
 class MainActivity : AppCompatActivity() {
@@ -38,9 +43,24 @@ class MainActivity : AppCompatActivity() {
     val REQUEST_CODE = 1
     private val TAG = "MyActivity"
     private var fitnessOptions = FitnessOptions.builder().addDataType(DataType.TYPE_LOCATION_SAMPLE).build()
-    lateinit var StepInput: EditText
-    lateinit var AgeInput: EditText
-    lateinit var HeightInput: EditText
+//    lateinit var StepInput: EditText
+//    lateinit var AgeInput: EditText
+//    lateinit var HeightInput: EditText
+    companion object {
+        const val REQUEST_WRITE_STORAGE_PERMISSION = 1002
+    }
+
+    private lateinit var inputAge: TextInputEditText
+    private lateinit var inputHeight: TextInputEditText
+    private lateinit var inputWeight: TextInputEditText
+    private lateinit var inputStepGoal: TextInputEditText
+    private lateinit var nextButton: MaterialButton
+    private val _cadenceLiveData = MutableLiveData<Double>()
+    val cadenceLiveData: LiveData<Double> = _cadenceLiveData
+    private lateinit var cadenceProgressBar: ProgressBar
+    private lateinit var cadenceTextView: TextView
+
+
 
     val fitnessOptions2 = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestEmail()
@@ -54,18 +74,40 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         //setContentView(R.layout.activity_main)
 
+        // Check if the WRITE_EXTERNAL_STORAGE permission is already granted
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED) {
+            // If not, request the permission
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQUEST_WRITE_STORAGE_PERMISSION
+            )
+        } else {
+            // Permission is already granted, you can initialize your logger or proceed with file operations
+            initializeLoggerAndProceed()
+        }
+
+        inputAge = findViewById<TextInputEditText>(R.id.input_age)
+        inputHeight = findViewById<TextInputEditText>(R.id.input_height)
+        inputWeight = findViewById<TextInputEditText>(R.id.input_weight)
+        inputStepGoal = findViewById<TextInputEditText>(R.id.input_step_goal)
+
+//        nextButton = findViewById<MaterialButton>(R.id.next_button)
+//        nextButton.setOnClickListener { createLogFileAndNavigate() }
+
         val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
-        StepInput = findViewById(R.id.stepsInput)
-        AgeInput = findViewById(R.id.ageInput)
-        HeightInput = findViewById(R.id.HeightInput)
+        // Initialize ProgressBar and TextView
+
 
         // Start the PermissionActivity to request permissions and then start the service
-        val intent = Intent(this, PermissionActivity::class.java)
-        startActivity(intent)
+//        val intent = Intent(this, PermissionActivity::class.java)
+//        startActivity(intent)
 
         if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
             GoogleSignIn.requestPermissions(
@@ -74,70 +116,36 @@ class MainActivity : AppCompatActivity() {
                 account,
                 fitnessOptions)
         }
-//        else {
-//            accessGoogleFit(fitnessOptions)
-//
-//        }
-
-
-
 
 
         setFitnessOption();
         checkFitInstalled();
 
 
-        binding.root.findViewById<Button>(R.id.button1).setOnClickListener { view ->
+        binding.root.findViewById<Button>(R.id.next_button).setOnClickListener { view ->
+            createLogFileAndNavigate()
+            val serviceIntent = Intent(this, NewService::class.java)
+
 
             //val connection: Socket = Socket(address, port)
             //val writer: OutputStream = connection.getOutputStream()
             // writer.write(("hellooo" + '\n').toByteArray(Charset.defaultCharset()))
-            val steps = StepInput.text.toString()
-            val age = AgeInput.text.toString()
-            val height = HeightInput.text.toString()
+            val steps = inputStepGoal.text.toString()
+            val age = inputAge.text.toString()
+            val height = inputHeight.text.toString()
+            val weight = inputWeight.text.toString()
 
-//            Log.v(TAG, "index=" + 1);
-            val serviceIntent = Intent(this, NewService::class.java)
-
-            // Add user inputs as extras
-            serviceIntent.putExtra("steps", steps)
+            serviceIntent.putExtra("steps", steps)  // Hardcoded value
             serviceIntent.putExtra("age", age)
             serviceIntent.putExtra("height", height)
-
+            serviceIntent.putExtra("weight", weight)
             startService(serviceIntent)
-//            //test123()
-
-
-
-        }
-
-        binding.root.findViewById<Button>(R.id.button2).setOnClickListener { view ->
-
-            //setOnwTimeWorkRequest()
-            //Log.v(TAG, "index=" + textInput.text);
-            println(AgeInput.text)
-            println(HeightInput.text)
-            println(StepInput.text)
-
-
-        }
-
-        binding.root.findViewById<Button>(R.id.button3).setOnClickListener { view ->
 
 
         }
 
 
 
-
-//       val fitnessOptions = FitnessOptions.builder()
-//            .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-//            .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-//            .build()
-//
-//
-//
-//
 
 
 
@@ -228,6 +236,17 @@ class MainActivity : AppCompatActivity() {
 
 
     }
+    private fun startCadenceService() {
+        val serviceIntent = Intent(this, NewService::class.java)
+        startService(serviceIntent)
+    }
+
+    private fun updateCadenceUI(cadence: Double) {
+        val MAX_CADENCE= 2000
+        val progress = (cadence * 100 / MAX_CADENCE).toInt() // Assuming MAX_CADENCE is a constant you define
+        cadenceProgressBar.progress = progress
+        cadenceTextView.text = "${cadence.toInt()} steps/min"
+    }
 
     fun checkFitInstalled() {
         if (isGoogleFitPermissionGranted()) {
@@ -236,6 +255,56 @@ class MainActivity : AppCompatActivity() {
             requestGoogleFitPermission()
         }
     }
+    // Handle the result of the permission request
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_WRITE_STORAGE_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, proceed with file operations
+                initializeLoggerAndProceed()
+            } else {
+                // Permission denied, show a message to the user or handle it gracefully
+            }
+        }
+    }
+
+    private fun initializeLoggerAndProceed() {
+        // Initialize your DataLogger or other components that require the permission
+    }
+    private fun createLogFileAndNavigate() {
+        val userAge = inputAge.text.toString()
+        val userHeight = inputHeight.text.toString()
+        val userWeight = inputWeight.text.toString()
+        val stepGoal = inputStepGoal.text.toString()
+
+        val logFile = File(filesDir, "user_data.log")
+
+        try {
+            if (!logFile.exists()) {
+                logFile.createNewFile()
+            }
+
+            val writer = FileWriter(logFile, true)
+            writer.append("Age: $userAge, Height: $userHeight, Weight: $userWeight, Step Goal: $stepGoal\n")
+            writer.close()
+
+            Toast.makeText(this, "Log file created successfully!", Toast.LENGTH_SHORT).show()
+
+            // Pass the step goal to the FirstActivity
+            val intent = Intent(this, FirstActivity::class.java).apply {
+                putExtra("STEP_GOAL", stepGoal.toInt())
+            }
+            startActivity(intent)
+        } catch (e: IOException) {
+            e.printStackTrace()
+            Toast.makeText(this, "Error creating log file!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+
 
     fun setFitnessOption() {
         fitnessOptions = FitnessOptions.builder()
@@ -267,45 +336,6 @@ class MainActivity : AppCompatActivity() {
             fitnessOptions
         )
     }
-//    private fun accessGoogleFit(fitnessOptions:FitnessOptions ) {
-//        val end = LocalDateTime.now()
-//        val start = end.minusYears(1)
-//        val endSeconds = end.atZone(ZoneId.systemDefault()).toEpochSecond()
-//        val startSeconds = start.atZone(ZoneId.systemDefault()).toEpochSecond()
-//
-//        val readRequest = DataReadRequest.Builder()
-//            .aggregate(DataType.AGGREGATE_STEP_COUNT_DELTA)
-//            .setTimeRange(startSeconds, endSeconds, TimeUnit.SECONDS)
-//            .bucketByTime(1, TimeUnit.DAYS)
-//            .build()
-//
-//        val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
-//        val response = Fitness.getHistoryClient(this, account)
-//            .readData(readRequest)
-//            .addOnSuccessListener({ response ->
-//                // Use response data here
-//                Log.i(TAG, "OnSuccess()")
-//            })
-//            .addOnFailureListener({ e -> Log.d(TAG, "OnFailure()", e) })
-//
-//
-////        val readDataResponse = Tasks.await<DataReadResponse>(response)
-////        val dataSet = readDataResponse.getDataSet(DataType.TYPE_STEP_COUNT_DELTA)
-//        //FirstFragment.test(response)
-//
-//        val request = OneTimeWorkRequestBuilder<Dataworker>().build()
-//        WorkManager.getInstance(this).enqueue(request)
-//
-//
-//        WorkManager.getInstance(this).getWorkInfoByIdLiveData(request.id)
-//        .observe(this, Observer {
-//
-//            val status: String = it.state.name
-//            Toast.makeText(this,status, Toast.LENGTH_SHORT).show()
-//        })
-//
-//
-//    }
 
 
 
@@ -325,9 +355,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        val navController = findNavController(R.id.nav_host_fragment_content_main)
-        return navController.navigateUp(appBarConfiguration)
-                || super.onSupportNavigateUp()
-    }
+
 }

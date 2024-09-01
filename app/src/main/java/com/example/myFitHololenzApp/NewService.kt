@@ -1,41 +1,35 @@
 package com.example.myFitHololenzApp
 
+
 import android.Manifest
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
 import android.os.IBinder
 import android.util.Log
 import androidx.annotation.Nullable
 import androidx.core.app.ActivityCompat
-import androidx.lifecycle.MutableLiveData
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
-import com.google.android.gms.fitness.data.DataPoint
-import com.google.android.gms.fitness.data.DataSource
+import com.google.android.gms.fitness.data.DataSet
 import com.google.android.gms.fitness.data.DataType
-import com.google.android.gms.fitness.data.Value
-import com.google.android.gms.fitness.request.DataSourcesRequest
+import com.google.android.gms.fitness.request.DataReadRequest
 import com.google.android.gms.fitness.request.OnDataPointListener
 import com.google.android.gms.fitness.request.SensorRequest
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
 import java.io.BufferedWriter
 import java.io.IOException
 import java.io.OutputStreamWriter
 import java.net.Socket
 import java.util.concurrent.TimeUnit
 
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.fitness.data.DataSet
-import com.google.android.gms.fitness.request.DataReadRequest
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-
 class NewService : Service() {
+
+    // Binder given to clients
+
 
     private val TAG = "server"
     private val fitnessOptions = FitnessOptions.builder()
@@ -54,6 +48,7 @@ class NewService : Service() {
     private var steps: String? = null
     private var age: String? = null
     private var height: String? = null
+    private var weight: String? = null
     private var userInputsSent = false
 
     private var socket: Socket? = null
@@ -61,21 +56,22 @@ class NewService : Service() {
     private val REQUEST_LOCATION_PERMISSION = 1
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    // Class used for the client Binder.
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Service created")
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
-        // Initialize the LocationCallback
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                for (location in locationResult.locations) {
-                    Log.i(TAG, "Location: ${location.latitude}, ${location.longitude}")
-                    //sendLocationData(location.latitude, location.longitude)
-                }
-            }
-        }
+//        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+//
+//        // Initialize the LocationCallback
+//        locationCallback = object : LocationCallback() {
+//            override fun onLocationResult(locationResult: LocationResult) {
+//                for (location in locationResult.locations) {
+//                    Log.i(TAG, "Location: ${location.latitude}, ${location.longitude}")
+//                    //sendLocationData(location.latitude, location.longitude)
+//                }
+//            }
+//        }
 
         // Check for necessary permissions
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED ||
@@ -89,25 +85,36 @@ class NewService : Service() {
         registerHeartRateListener(account)
         registerStepCountListener(account)
         accessGoogleFit(account)
-        startLocationUpdates()
+        //startLocationUpdates()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "Service started")
 
+        // Check if the intent is null
+        if (intent == null) {
+            Log.e(TAG, "Intent is null in onStartCommand")
+            return START_NOT_STICKY
+        }
 
         // Retrieve the user inputs from the Intent if they haven't been set yet
-        if (steps == null || age == null || height == null) {
-            steps = intent?.getStringExtra("steps")
-            age = intent?.getStringExtra("age")
-            height = intent?.getStringExtra("height")
+        steps = intent.getStringExtra("steps")
+        age = intent.getStringExtra("age")
+        height = intent.getStringExtra("height")
+        weight = intent.getStringExtra("weight")
 
-            // Use the retrieved data (for example, log it)
-            Log.i(TAG, "Received data - Steps: $steps, Age: $age, Height: $height")
+        Log.i(TAG, "Received data - Steps: $steps, Age: $age, Height: $height, Weight: $weight")
+
+        // Check if the data was received correctly
+        if (steps == null || age == null || height == null || weight == null) {
+            Log.e(TAG, "One or more data fields are null")
+        } else {
+            Log.i(TAG, "Data received successfully: Steps: $steps, Age: $age, Height: $height, Weight: $weight")
         }
 
         return START_NOT_STICKY
     }
+
 
     @Nullable
     override fun onBind(intent: Intent?): IBinder? {
@@ -178,13 +185,13 @@ class NewService : Service() {
                 }
                 // Calculate cadence
                 val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
-                val cadence = if (timeDifference > 0) (stepDifference / (timeDifference / 60.0)) else 0.0
+                val cadence = calculateCadence(currentStepCount, currentTimestamp)
+                Log.i(TAG, "Cadence: $cadence steps/min")
 
                 Log.i(TAG, "Detected step count: $currentStepCount, Cadence: $cadence steps/min, stepDifference: $stepDifference")
 
                 lastStepCount = currentStepCount
                 lastTimestamp = currentTimestamp
-
                 // Send both step count and cadence
                 sendData(totalSteps, cadence)
             }
@@ -204,6 +211,23 @@ class NewService : Service() {
                 Log.e(TAG, "Failed to register step count listener", e)
             }
     }
+    fun calculateCadence(currentStepCount: Int, currentTimestamp: Long): Double {
+        if (lastStepCount == 0) {
+            lastStepCount = currentStepCount
+            lastTimestamp = currentTimestamp
+            Log.i(TAG, "Initial step count: $currentStepCount")
+            return 0.0
+        }
+
+        val stepDifference = currentStepCount - lastStepCount
+        val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
+
+        lastStepCount = currentStepCount
+        lastTimestamp = currentTimestamp
+
+        return if (timeDifference > 0) (stepDifference / (timeDifference / 60.0)) else 0.0
+    }
+
 
     private fun unregisterListeners() {
         val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
@@ -279,18 +303,18 @@ class NewService : Service() {
 
 
 
-
     private fun sendData(stepCount: Int, cadence: Double) {
+        Log.i(TAG, "sendingy: Steps: $steps, Age: $age, Height: $height, Weight: $weight")
         Thread {
             try {
                 if (socket == null || socket!!.isClosed) {
-                    socket = Socket("10.150.31.59", 9090)
+                    socket = Socket("10.150.33.37", 9090)
                     writer = BufferedWriter(OutputStreamWriter(socket!!.getOutputStream(), "UTF-8"))
                 }
 
                 // Send user inputs only once
-                if (!userInputsSent && steps != null && age != null && height != null) {
-                    writer!!.write("Steps: $steps, Age: $age, Weight: $height, $stepCount,$cadence\n")
+                if (!userInputsSent && steps != null && age != null && weight != null) {
+                    writer!!.write("Steps: $steps, Age: $age, Weight: $weight, $stepCount,$cadence\n")
                     writer!!.flush()
                     userInputsSent = true // Mark user inputs as sent
                 } else {
@@ -319,20 +343,20 @@ class NewService : Service() {
         }
     }
 
-    private fun startLocationUpdates() {
-        val locationRequest = LocationRequest.create().apply {
-            interval = 10000 // 10 seconds
-            fastestInterval = 5000 // 5 seconds
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        }
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
-        } else {
-            Log.e(TAG, "Location permissions not granted")
-        }
-    }
+//    private fun startLocationUpdates() {
+//        val locationRequest = LocationRequest.create().apply {
+//            interval = 10000 // 10 seconds
+//            fastestInterval = 5000 // 5 seconds
+//            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+//        }
+//
+//        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+//            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+//            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
+//        } else {
+//            Log.e(TAG, "Location permissions not granted")
+//        }
+//    }
 
     private fun stopLocationUpdates() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
