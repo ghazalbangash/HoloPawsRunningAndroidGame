@@ -2,6 +2,7 @@ package com.example.myFitHololenzApp
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.drawable.AnimationDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -50,6 +51,9 @@ class FirstFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         Log.i(TAG, "Fragment created here")
+        val walkingDog = binding.walkingDog
+        val theDogAnimation = walkingDog.background as AnimationDrawable
+        theDogAnimation.start()
 
         dataLogger = DataLogger(requireContext(), "fitness_data_log.txt")
 
@@ -63,7 +67,7 @@ class FirstFragment : Fragment() {
                 fitnessOptions
             )
         } else {
-            accessGoogleFitData(account)
+           accessGoogleFitData(account)
         }
 
         // Example usage: Assume the user enters a total step goal of 3000
@@ -99,27 +103,30 @@ class FirstFragment : Fragment() {
 
     private fun accessGoogleFitData(account: GoogleSignInAccount) {
         // Register listener for step count
+
         val stepCountListener = OnDataPointListener { dataPoint ->
             for (field in dataPoint.dataType.fields) {
                 val currentStepCount = dataPoint.getValue(field).asInt()
                 val currentTimestamp = System.currentTimeMillis()
                 binding.textStepCount.text = "${currentStepCount.toInt()}"
 
+                // If this is the first step count reading, store it as the base value to subtract later
                 if (lastStepCount == 0) {
-                    lastStepCount = currentStepCount
+                    lastStepCount = currentStepCount // This becomes your baseline
                     lastTimestamp = currentTimestamp
                     Log.i(TAG, "Initial step count: $currentStepCount")
                     return@OnDataPointListener
                 }
 
-                // Calculate step difference
-                val stepDifference = currentStepCount - lastStepCount
+                // Calculate step difference relative to the first reading
+                val stepDifference = currentStepCount - lastStepCount // Adjusted for the first reading
                 val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
 
                 if (stepDifference > 0) {
                     totalSteps += stepDifference
                     Log.i(TAG, "step diff: $stepDifference, total: $totalSteps")
                 }
+
                 val cadence = if (timeDifference > 0) (stepDifference / (timeDifference / 60.0)) else 0.0
 
                 // Update UI with cadence
@@ -135,7 +142,7 @@ class FirstFragment : Fragment() {
 
         val sensorRequest = SensorRequest.Builder()
             .setDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
-            .setSamplingRate(10, TimeUnit.SECONDS)
+            .setSamplingRate(1, TimeUnit.SECONDS)
             .build()
 
         Fitness.getSensorsClient(requireContext(), account)
@@ -155,15 +162,15 @@ class FirstFragment : Fragment() {
         when (currentLevel) {
             ActivityLevel.BriskWalking -> {
                 binding.textHeartRateLabel.text = "Brisk Walking Completed"
-                binding.textHeartRate.text = "${totalSteps.toInt()} steps/min"
+                binding.textHeartRate.text = "${totalSteps.toInt()} "
             }
             ActivityLevel.Jogging -> {
                 binding.textHeartRateLabel.text = "Jogging Completed"
-                binding.textHeartRate.text = "${totalSteps.toInt()} steps/min"
+                binding.textHeartRate.text = "${totalSteps.toInt()} "
             }
             ActivityLevel.Running -> {
                 binding.textHeartRateLabel.text = "Running Completed"
-                binding.textHeartRate.text = "${totalSteps.toInt()} steps/min"
+                binding.textHeartRate.text = "${totalSteps.toInt()} "
             }
         }
     }

@@ -29,7 +29,9 @@ import java.util.concurrent.TimeUnit
 class NewService : Service() {
 
     // Binder given to clients
-
+    private val cadenceBuffer = ArrayDeque<Double>()
+    private val maxBufferSize = 5  // Smoothing over the last 5 cadence readings
+    private lateinit var dataLogger: DataLogger
 
     private val TAG = "server"
     private val fitnessOptions = FitnessOptions.builder()
@@ -90,6 +92,7 @@ class NewService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "Service started")
+        dataLogger = DataLogger(this, "fitness_data_log1.txt")
 
         // Check if the intent is null
         if (intent == null) {
@@ -124,6 +127,17 @@ class NewService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterListeners()
+    }
+    private fun logFitnessData(stepCount: Int, cadence: Double) {
+        val logEntry = "Time: ${System.currentTimeMillis()}, Steps: $stepCount, Cadence: $cadence"
+        dataLogger.logData(logEntry)
+    }
+    private fun smoothCadence(newCadence: Double): Double {
+        if (cadenceBuffer.size == maxBufferSize) {
+            cadenceBuffer.removeFirst() // Remove the oldest value
+        }
+        cadenceBuffer.addLast(newCadence)
+        return cadenceBuffer.average() // Compute average of the buffer
     }
 
     private fun registerHeartRateListener(account: GoogleSignInAccount) {
@@ -167,6 +181,7 @@ class NewService : Service() {
                 val currentStepCount = dataPoint.getValue(field).asInt()
                 val currentTimestamp = System.currentTimeMillis()
 
+                // If lastStepCount has not been set yet, initialize it
                 if (lastStepCount == 0) {
                     lastStepCount = currentStepCount
                     lastTimestamp = currentTimestamp
@@ -176,30 +191,33 @@ class NewService : Service() {
 
                 // Calculate step difference
                 val stepDifference = currentStepCount - lastStepCount
-                Log.i(TAG, "total step: $totalSteps, step dif : $stepDifference")
-                Log.i(TAG, "curstep: $currentStepCount, last : $lastStepCount")
+                Log.i(TAG, "total step: $totalSteps, step difference: $stepDifference")
 
+                // Update total steps only if the step difference is positive
                 if (stepDifference > 0) {
                     totalSteps += stepDifference
-                    Log.i(TAG, "step diff: $stepDifference, total: $totalSteps")
+                    Log.i(TAG, "Step difference: $stepDifference, Total steps: $totalSteps")
                 }
-                // Calculate cadence
-                val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
-                val cadence = calculateCadence(currentStepCount, currentTimestamp)
-                Log.i(TAG, "Cadence: $cadence steps/min")
 
-                Log.i(TAG, "Detected step count: $currentStepCount, Cadence: $cadence steps/min, stepDifference: $stepDifference")
+                // Update cadence
+                val rawCadence = calculateCadence(currentStepCount, currentTimestamp)
+                val smoothedCadence = smoothCadence(rawCadence)
 
+                Log.i(TAG, "Detected step count: $currentStepCount, Smoothed Cadence: $smoothedCadence steps/min")
+
+                // Update lastStepCount and lastTimestamp for the next iteration
                 lastStepCount = currentStepCount
                 lastTimestamp = currentTimestamp
+
                 // Send both step count and cadence
-                sendData(totalSteps, cadence)
+                logFitnessData(totalSteps, rawCadence)
+                sendData(totalSteps, smoothedCadence)
             }
         }
 
         val sensorRequest = SensorRequest.Builder()
             .setDataType(DataType.TYPE_STEP_COUNT_CUMULATIVE)
-            .setSamplingRate(10, TimeUnit.SECONDS)
+            .setSamplingRate(1, TimeUnit.SECONDS)  // Reduced to 1 second for more frequent updates
             .build()
 
         Fitness.getSensorsClient(this, account)
@@ -212,21 +230,38 @@ class NewService : Service() {
             }
     }
     fun calculateCadence(currentStepCount: Int, currentTimestamp: Long): Double {
-        if (lastStepCount == 0) {
-            lastStepCount = currentStepCount
-            lastTimestamp = currentTimestamp
-            Log.i(TAG, "Initial step count: $currentStepCount")
-            return 0.0
-        }
-
         val stepDifference = currentStepCount - lastStepCount
         val timeDifference = (currentTimestamp - lastTimestamp) / 1000.0 // in seconds
 
-        lastStepCount = currentStepCount
-        lastTimestamp = currentTimestamp
+        // If no step difference or negative time difference, return 0.0
+        if (stepDifference == 0 || timeDifference <= 0) {
+            return 0.0
+        }
 
-        return if (timeDifference > 0) (stepDifference / (timeDifference / 60.0)) else 0.0
+        // Handle step overflow or anomalies
+        if (stepDifference < 0 || stepDifference > 50) {  // Adjust the upper limit as needed
+            Log.e(TAG, "Unusual step difference: $stepDifference")
+            return 0.0
+        }
+
+        // Calculate cadence (steps per minute)
+        val cadence = (stepDifference / (timeDifference / 60.0))
+
+        // Smoothing cadence with exponential moving average
+        val smoothingFactor = 0.5 // Adjust this for more or less smoothing
+        val smoothedCadence = if (cadenceBuffer.isNotEmpty()) {
+            smoothingFactor * cadence + (1 - smoothingFactor) * cadenceBuffer.last()
+        } else {
+            cadence
+        }
+
+        // Add cadence bounds to filter out unlikely values
+        val minCadence = 30.0
+        val maxCadence = 200.0
+        return if (smoothedCadence in minCadence..maxCadence) smoothedCadence else 0.0
     }
+
+
 
 
     private fun unregisterListeners() {
@@ -304,11 +339,12 @@ class NewService : Service() {
 
 
     private fun sendData(stepCount: Int, cadence: Double) {
+        Log.i(TAG, "Sending: Steps: $steps, Age: $age, Height: $height, Weight: $weight, Total Steps: $stepCount, Cadence: $cadence")
         Log.i(TAG, "sendingy: Steps: $steps, Age: $age, Height: $height, Weight: $weight")
         Thread {
             try {
                 if (socket == null || socket!!.isClosed) {
-                    socket = Socket("10.150.33.37", 9090)
+                    socket = Socket("192.168.105.186", 9090)
                     writer = BufferedWriter(OutputStreamWriter(socket!!.getOutputStream(), "UTF-8"))
                 }
 
