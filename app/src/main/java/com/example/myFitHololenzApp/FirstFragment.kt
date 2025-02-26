@@ -161,15 +161,15 @@ class FirstFragment : Fragment() {
 
         when (currentLevel) {
             ActivityLevel.BriskWalking -> {
-                binding.textHeartRateLabel.text = "Brisk Walking Completed"
+                binding.textHeartRateLabel.text = "Brisk Walking Level "
                 binding.textHeartRate.text = "${totalSteps.toInt()} "
             }
             ActivityLevel.Jogging -> {
-                binding.textHeartRateLabel.text = "Jogging Completed"
+                binding.textHeartRateLabel.text = "Jogging  level "
                 binding.textHeartRate.text = "${totalSteps.toInt()} "
             }
             ActivityLevel.Running -> {
-                binding.textHeartRateLabel.text = "Running Completed"
+                binding.textHeartRateLabel.text = "Running  level"
                 binding.textHeartRate.text = "${totalSteps.toInt()} "
             }
         }

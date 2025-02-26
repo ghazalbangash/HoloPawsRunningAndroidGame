@@ -11,7 +11,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="XYZ"
+        android:text="PawTrack"
         android:textSize="28sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp"
